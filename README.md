@@ -3,6 +3,10 @@
 iBox turns a jailbroken **iPhone 4 (iOS 6)** and an official Apple 30-pin AV adapter into a
 stand-alone TV box. Everything runs on the phone; no PC or server is needed.
 
+Release 1.0: [download the .deb](https://github.com/sachomatic/iBox/releases/tag/v1.0). Write-ups:
+[YouTube at 720p on iOS 6](https://github.com/sachomatic/ios6-youtube-720p) ·
+[iPhone 4 → TV, natively (iOS 6 field notes)](https://github.com/sachomatic/iphone4-tv-notes).
+
 | Feature | How it works on the iPhone |
 |---|---|
 | **Jellyfin** | Finds servers on your LAN automatically. Has home rows (continue watching, next up), libraries, shows › seasons › episodes (episodes keep playing through the season), music albums and search. Lets you pick audio and subtitle tracks, before playing or from the player's options. Text subtitles (SRT, ASS, WebVTT…) are drawn by iBox, so the video can still direct-play; picture subtitles (PGS, DVD) are burned in by the server. Reports progress back to Jellyfin. Uses a device profile matched to the A4 (H.264 Main ≤ 720p, AAC stereo), so compatible files direct-play and the rest are transcoded to HLS. |
