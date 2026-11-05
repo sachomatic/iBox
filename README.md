@@ -1,5 +1,7 @@
 # iBox — an iPhone 4 TV box
 
+## ⚠️Warning : this has been mostly made with AI, I did *NOT* check the code. Use at your own risk!
+
 iBox turns a jailbroken **iPhone 4 (iOS 6)** and an official Apple 30-pin AV adapter into a
 stand-alone TV box. Everything runs on the phone; no PC or server is needed.
 
