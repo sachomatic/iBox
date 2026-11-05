@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0f1a">
+<link rel="apple-touch-icon" href="/icon.png">
+<title>iBox Remote</title>
+<style>
+  :root {
+    --bg: #0b0f1a; --panel: #151b2c; --panel2: #1d2540; --line: #2a3350; --text: #eef1f8; --muted: #8c95ad;
+    --accent: #00a4dc; --accent2: #1ed760; --danger: #e5484d;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 460px; margin: 0 auto; padding: 16px 16px 40px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 22px 0 8px; font-weight: 600; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); margin-right: 6px; }
+  .dot.on { background: var(--accent2); }
+  .status { color: var(--muted); font-size: 13px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px;
+           padding: 12px 10px; cursor: pointer; touch-action: manipulation; user-select: none; }
+  button:active { transform: scale(.96); background: #27304f; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+  input, select { font: inherit; color: var(--text); background: #0f1424; border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; width: 100%; min-width: 0; }
+  input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .row > .shrink { flex: 0 0 auto; }
+
+  .np { display: none; gap: 12px; align-items: center; }
+  .np.show { display: flex; }
+  .np img { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--panel2); flex: 0 0 auto; }
+  .np .meta { flex: 1; min-width: 0; }
+  .np .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .np .s { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; margin-top: 8px; overflow: hidden; cursor: pointer; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .transport { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 12px; }
+
+  .dpad { position: relative; width: 240px; height: 240px; margin: 8px auto 4px; }
+  .dpad button { position: absolute; width: 80px; height: 80px; font-size: 22px; border-radius: 16px; }
+  .dpad .up { left: 80px; top: 0; } .dpad .down { left: 80px; bottom: 0; }
+  .dpad .left { left: 0; top: 80px; } .dpad .right { right: 0; top: 80px; }
+  .dpad .ok { left: 80px; top: 80px; border-radius: 50%; background: var(--accent); border-color: var(--accent); font-weight: 700; font-size: 18px; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .keys [data-vol] { grid-column: span 1; }
+  #reset { color: #ffb4b6; }
+
+  .prompt { display: none; border-color: var(--accent); }
+  .prompt.show { display: block; }
+  .prompt label { display: block; font-weight: 600; margin-bottom: 8px; }
+
+  details summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
+  .grid { display: grid; gap: 10px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  a { color: var(--accent); }
+  .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #222b45; border: 1px solid var(--line);
+           padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+  .battery { margin-right: 10px; color: var(--muted, #8c95ad); font-variant-numeric: tabular-nums; }
+  .battery.low { color: #ff6b6b; font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>iBox</h1>
+    <span class="status"><span id="battery" class="battery"></span><span class="dot" id="dot"></span><span id="where">connecting…</span></span>
+  </header>
+
+  <div class="card np" id="np">
+    <img id="npArt" alt="">
+    <div class="meta">
+      <div class="t" id="npTitle"></div>
+      <div class="s" id="npSub"></div>
+      <div class="bar" id="npBar"><i id="npFill"></i></div>
+      <div class="s" id="npTime"></div>
+    </div>
+  </div>
+  <div class="transport" id="transport" style="display:none">
+    <button data-player="prev">⏮</button>
+    <button data-player="seekby" data-value="-10">−10s</button>
+    <button data-player="playpause" class="primary">⏯</button>
+    <button data-player="seekby" data-value="30">+30s</button>
+    <button data-player="next">⏭</button>
+    <button data-key="info" title="Audio, subtitles, quality">Options</button>
+  </div>
+
+  <div class="card prompt" id="prompt" style="margin-top:12px">
+    <label id="promptTitle">Type</label>
+    <div class="row">
+      <input id="promptInput" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <button class="primary shrink" id="promptGo">OK</button>
+    </div>
+  </div>
+
+  <div class="dpad">
+    <button class="up" data-key="up" aria-label="Up">▲</button>
+    <button class="left" data-key="left" aria-label="Left">◀</button>
+    <button class="ok" data-key="select">OK</button>
+    <button class="right" data-key="right" aria-label="Right">▶</button>
+    <button class="down" data-key="down" aria-label="Down">▼</button>
+  </div>
+  <div class="keys">
+    <button data-key="back">Back</button>
+    <button data-key="home">Home</button>
+    <button id="reset">Reset</button>
+    <button data-vol="-0.1">Vol −</button>
+    <button data-vol="0.1">Vol +</button>
+  </div>
+
+  <h2>Search</h2>
+  <div class="row">
+    <select id="searchService" class="shrink" style="width:auto">
+      <option value="youtube">YouTube</option>
+      <option value="jellyfin">Jellyfin</option>
+      <option value="spotify">Spotify</option>
+      <option value="radio">Radio</option>
+    </select>
+    <input id="searchInput" placeholder="Search on the TV…" enterkeyhint="search">
+  </div>
+
+  <h2>Play a link</h2>
+  <div class="row">
+    <input id="castInput" placeholder="YouTube, Spotify, .m3u8, .mp4, .mp3, .m3u…" inputmode="url" enterkeyhint="go">
+    <button class="primary shrink" id="castGo">Play</button>
+  </div>
+  <div class="hint">Tip: copy a link from any app and paste it here.</div>
+
+  <h2>Screen share</h2>
+  <div class="card grid">
+    <div>From a computer: open <a id="castLink" href="#" target="_blank">the cast page</a> in Chrome, Edge or Firefox and accept the certificate warning once.</div>
+    <div class="row">
+      <input id="vncInput" placeholder="VNC: host[:port] [password]">
+      <button class="shrink" id="vncGo">View</button>
+    </div>
+    <div class="hint">Android: install droidVNC-NG and connect to its IP. Windows: TightVNC/UltraVNC. Mac: Screen Sharing with a VNC password.</div>
+  </div>
+
+  <h2>Settings</h2>
+  <details class="card">
+    <summary>Accounts &amp; options</summary>
+    <form id="settings" class="grid" style="margin-top:10px">
+      <div class="field"><label>Jellyfin server</label><input name="jellyfinURL" placeholder="http://192.168.1.10:8096"></div>
+      <div class="row">
+        <div class="field"><label>Jellyfin user</label><input name="jellyfinUser" autocapitalize="off"></div>
+        <div class="field"><label>Password</label><input name="jellyfinPassword" type="password"></div>
+      </div>
+      <div class="field"><label>YouTube Data API key</label><input name="youtubeApiKey" autocapitalize="off"></div>
+      <div class="row">
+        <div class="field"><label>Spotify client ID</label><input name="spotifyClientId" autocapitalize="off"></div>
+        <div class="field"><label>Client secret</label><input name="spotifyClientSecret" type="password"></div>
+      </div>
+      <div class="field"><label>Live TV playlist (M3U)</label><input name="iptvURL" placeholder="Default: iptv-org for your country"></div>
+      <div class="row">
+        <div class="field"><label>Country code</label><input name="country" maxlength="2" placeholder="auto"></div>
+        <div class="field"><label>Weather "lat,lon"</label><input name="weatherLocation" placeholder="auto"></div>
+      </div>
+      <div class="field"><label>Saved VNC servers (one per line)</label><input name="vncHosts" placeholder="192.168.1.20:5900 secret"></div>
+      <button class="primary" type="submit">Save</button>
+      <div class="hint">Passwords are stored on the iPhone and never shown again.</div>
+    </form>
+  </details>
+
+  <h2>Trouble?</h2>
+  <div class="card grid">
+    <div class="hint"><b>Reset</b> (next to Home) stops everything that plays and goes back to Home. If iBox itself is stuck, restart the app:</div>
+    <button class="danger" id="restart">Restart the app</button>
+    <div class="hint">Closes and reopens iBox on the iPhone (about 10 s). Works even when iBox is frozen.
+      If this page stops responding, open <a id="watchdogLink" href="#">the restart page</a>.</div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = (path, body) => fetch(path, body === undefined ? {} : {
+  method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+}).then(r => r.json());
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function key(k) { if (navigator.vibrate) navigator.vibrate(8); api('/api/key', {key: k}).then(poll).catch(() => {}); }
+function fmt(s) { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
+
+document.querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => key(b.dataset.key)));
+document.querySelectorAll('[data-player]').forEach(b => b.addEventListener('click', () =>
+  api('/api/player', {action: b.dataset.player, value: parseFloat(b.dataset.value || '0')}).then(poll)));
+document.querySelectorAll('[data-vol]').forEach(b => b.addEventListener('click', () =>
+  api('/api/volume', {delta: parseFloat(b.dataset.vol)}).then(r => toast(r.fixed
+    ? 'The AV adapter gets a fixed volume from iOS: use the TV\'s remote'
+    : 'Volume ' + Math.round(r.volume * 100) + '%'))));
+$('reset').addEventListener('click', () => api('/api/reset', {}).then(() => toast('iBox reset')).catch(() =>
+  toast('iBox is not answering: use "Restart the app" below')));
+
+let duration = 0;
+$('npBar').addEventListener('click', (e) => {
+  if (!duration) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  api('/api/player', {action: 'seek', value: duration * (e.clientX - r.left) / r.width}).then(poll);
+});
+
+// Text prompts: what you type appears live on the TV.
+let promptOpen = false, typing = 0;
+$('promptInput').addEventListener('input', () => {
+  typing = Date.now();
+  api('/api/text', {text: $('promptInput').value});
+});
+function submitPrompt() { api('/api/text', {text: $('promptInput').value, submit: true}).then(poll); $('promptInput').blur(); }
+$('promptGo').addEventListener('click', submitPrompt);
+$('promptInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitPrompt(); });
+
+function cast() {
+  const url = $('castInput').value.trim(); if (!url) return;
+  api('/api/cast', {url}).then(r => { toast(r.ok ? 'Playing on the TV' : 'Could not play that link'); if (r.ok) $('castInput').value = ''; });
+}
+$('castGo').addEventListener('click', cast);
+$('castInput').addEventListener('keydown', e => { if (e.key === 'Enter') cast(); });
+$('searchInput').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  api('/api/search', {service: $('searchService').value, q: e.target.value.trim()}).then(() => toast('Results on the TV'));
+  e.target.blur();
+});
+$('vncGo').addEventListener('click', () => { const spec = $('vncInput').value.trim(); if (spec) api('/api/vnc', {spec}).then(() => toast('Connecting…')); });
+
+// Restart: ask the watchdog (port 8081, outside the app) so it works even when iBox is frozen.
+const watchdog = 'http://' + location.hostname + ':8081';
+$('watchdogLink').href = watchdog + '/';
+$('restart').addEventListener('click', () => {
+  if (!confirm('Restart the iBox app on the iPhone?')) return;
+  $('restart').disabled = true;
+  toast('Restarting iBox…');
+  fetch(watchdog + '/restart', {method: 'POST'})
+    .catch(() => fetch('/api/restart', {method: 'POST'}))
+    .catch(() => {})
+    .finally(() => setTimeout(() => location.reload(), 15000));
+});
+
+// Settings
+api('/api/settings').then(s => {
+  for (const [k, v] of Object.entries(s)) {
+    const el = document.querySelector(`[name="${k}"]`); if (!el) continue;
+    if (v === '__set__') el.placeholder = '•••••• (saved — leave empty to keep)'; else el.value = v;
+  }
+});
+$('settings').addEventListener('submit', e => {
+  e.preventDefault();
+  const body = {};
+  for (const el of e.target.elements) {
+    if (!el.name) continue;
+    if (el.type === 'password' && !el.value) continue;
+    body[el.name] = el.value;
+  }
+  api('/api/settings', body).then(() => toast('Saved'));
+});
+
+// Desktop keyboard shortcuts when no field is focused.
+document.addEventListener('keydown', e => {
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  const map = {ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'select', Backspace: 'back', Escape: 'back', h: 'home', ' ': 'playpause'};
+  if (map[e.key]) { e.preventDefault(); key(map[e.key]); }
+});
+
+let failures = 0, lastToast = '';
+function poll() {
+  return api('/api/state').then(s => {
+    failures = 0;
+    $('dot').classList.add('on');
+    if (s.build) {  // iBox was updated: load the new remote
+      if (!window.ibBuild) window.ibBuild = s.build;
+      else if (window.ibBuild !== s.build) { location.reload(); return; }
+    }
+    $('where').textContent = s.overlay ? 'Screen share' : (s.page || 'Home');
+    const b = s.battery || {};
+    $('battery').textContent = b.level >= 0 ? (b.state === 'charging' || b.state === 'full' ? '⚡' : '🔋') + b.level + '%' : '';
+    $('battery').classList.toggle('low', b.level >= 0 && b.level <= 20 && b.state === 'unplugged');
+    $('castLink').href = 'https://' + s.ip + ':8443/cast';
+    $('castLink').textContent = 'https://' + s.ip + ':8443/cast';
+
+    const p = s.player;
+    $('np').classList.toggle('show', !!p);
+    $('transport').style.display = p ? 'grid' : 'none';
+    if (p) {
+      $('npTitle').textContent = p.title;
+      $('npSub').textContent = [p.subtitle, p.note].filter(Boolean).join(' • ');
+      if ($('npArt').dataset.src !== p.artwork) { $('npArt').src = p.artwork || ''; $('npArt').dataset.src = p.artwork; }
+      duration = p.duration;
+      $('npFill').style.width = p.duration ? (100 * p.position / p.duration) + '%' : '0';
+      $('npTime').textContent = (p.paused ? 'Paused • ' : '') + (p.duration ? fmt(p.position) + ' / ' + fmt(p.duration) : 'Live') +
+        (p.count > 1 ? ` • ${p.index + 1}/${p.count}` : '');
+    }
+
+    if (s.toast && s.toast !== lastToast) toast(s.toast);
+    lastToast = s.toast || '';
+
+    const pr = s.prompt;
+    $('prompt').classList.toggle('show', !!pr);
+    if (pr && !promptOpen) {
+      $('promptTitle').textContent = pr.title;
+      $('promptInput').type = pr.secure ? 'password' : 'text';
+      $('promptInput').value = pr.value || '';
+      $('promptInput').focus();
+    } else if (pr && Date.now() - typing > 1500 && document.activeElement !== $('promptInput')) {
+      $('promptInput').value = pr.value || '';
+    }
+    promptOpen = !!pr;
+  }).catch(() => {
+    if (++failures > 2) { $('dot').classList.remove('on'); $('where').textContent = 'offline'; }
+    if (failures === 5) toast('iBox is not answering — use "Restart iBox" below');
+  });
+}
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

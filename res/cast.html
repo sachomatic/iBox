@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iBox Screen Cast</title>
+<style>
+  :root { --bg: #0b0f1a; --panel: #151b2c; --line: #2a3350; --text: #eef1f8; --muted: #8c95ad; --accent: #00a4dc; --danger: #e5484d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
+  p { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  select, button { font: inherit; color: var(--text); background: #0f1424; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  button { cursor: pointer; background: var(--accent); border-color: var(--accent); font-weight: 600; min-width: 140px; }
+  button.stop { background: var(--danger); border-color: var(--danger); }
+  video { width: 100%; border-radius: 10px; margin-top: 16px; background: #000; display: none; }
+  .stats { margin-top: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .warn { color: #f5c451; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cast your screen to iBox</h1>
+  <p>Pick a screen, window or tab. The iPhone shows it on the TV until you stop sharing.</p>
+  <div class="card">
+    <div class="row">
+      <div><label for="res">Resolution</label>
+        <select id="res"><option value="1280">720p (HDMI)</option><option value="960" selected>540p (balanced)</option><option value="720">SD (composite)</option></select></div>
+      <div><label for="fps">Frame rate</label>
+        <select id="fps"><option>5</option><option selected>10</option><option>15</option></select></div>
+      <div><label for="q">Quality</label>
+        <select id="q"><option value="0.45">Low</option><option value="0.6" selected>Medium</option><option value="0.75">High</option></select></div>
+      <button id="go">Share screen</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <video id="preview" muted autoplay playsinline></video>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let stream = null, running = false;
+
+if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+  $('stats').innerHTML = '<span class="warn">This browser can’t share its screen from here. Use desktop Chrome, Edge or Firefox over https://.</span>';
+  $('go').disabled = true;
+}
+
+$('go').addEventListener('click', async () => {
+  if (running) return stop();
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({video: {frameRate: 15}, audio: false});
+  } catch (e) { $('stats').textContent = 'Sharing cancelled.'; return; }
+  const video = $('preview');
+  video.srcObject = stream;
+  video.style.display = 'block';
+  stream.getVideoTracks()[0].addEventListener('ended', stop);
+  running = true;
+  $('go').textContent = 'Stop sharing';
+  $('go').classList.add('stop');
+  loop(video);
+});
+
+function stop() {
+  running = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  $('preview').style.display = 'none';
+  $('go').textContent = 'Share screen';
+  $('go').classList.remove('stop');
+}
+
+async function loop(video) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  let frames = 0, bytes = 0, since = performance.now();
+  while (running) {
+    const started = performance.now();
+    if (video.videoWidth) {
+      const maxW = parseInt($('res').value, 10);
+      const scale = Math.min(1, maxW / video.videoWidth, (maxW * 9 / 16) / video.videoHeight);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', parseFloat($('q').value)));
+      try {
+        // One frame in flight at a time: the iPhone sets the pace.
+        await fetch('/api/screen/frame', {method: 'POST', body: blob, headers: {'Content-Type': 'image/jpeg'}});
+        frames++; bytes += blob.size;
+      } catch (e) {
+        $('stats').innerHTML = '<span class="warn">Lost connection to iBox, retrying…</span>';
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    const now = performance.now();
+    if (now - since > 1000) {
+      $('stats').textContent = `${(frames * 1000 / (now - since)).toFixed(1)} fps • ${Math.round(bytes / Math.max(frames, 1) / 1024)} KB/frame • ${canvas.width}×${canvas.height}`;
+      frames = 0; bytes = 0; since = now;
+    }
+    const wait = 1000 / parseInt($('fps').value, 10) - (performance.now() - started);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  }
+}
+</script>
+</body>
+</html>
