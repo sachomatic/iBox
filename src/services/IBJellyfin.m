@@ -24,15 +24,17 @@ static const double kTicks = 10000000.0;
 }
 
 + (NSString *)token { return [IBSettings get:@"jellyfinToken"]; }
+// The token in a URL (streams, subtitles): "ApiKey" for recent servers, "api_key" for older ones.
++ (NSString *)tokenQuery { return [NSString stringWithFormat:@"ApiKey=%@&api_key=%@", self.token ?: @"", self.token ?: @""]; }
 + (NSString *)userId { return [IBSettings get:@"jellyfinUserId"]; }
 
 + (NSDictionary *)authHeaders {
     NSString *auth = [NSString stringWithFormat:@"MediaBrowser Client=\"iBox\", Device=\"%@\", DeviceId=\"%@\", Version=\"1.0\"%@",
                       [UIDevice currentDevice].name, [IBSettings deviceId],
                       self.token.length ? [NSString stringWithFormat:@", Token=\"%@\"", self.token] : @""];
-    NSMutableDictionary *h = [@{@"X-Emby-Authorization": auth} mutableCopy];
-    if (self.token.length) h[@"X-Emby-Token"] = self.token;
-    return h;
+    // The standard header. Recent servers (10.11+) refuse the legacy X-Emby-Authorization /
+    // X-Emby-Token headers with "400 Error processing request"; older ones accept this one too.
+    return [@{@"Authorization": auth} mutableCopy];
 }
 
 + (void)login:(void (^)(NSString *error))done {
@@ -465,8 +467,8 @@ static NSString *const kFields = @"Fields=PrimaryImageAspectRatio,ProductionYear
     NSString *delivery = IBString(stream[@"DeliveryUrl"]);
     NSString *url = delivery.length ? [[self server] stringByAppendingString:delivery]
         : [NSString stringWithFormat:@"%@/Videos/%@/%@/Subtitles/%@/0/Stream.vtt", [self server], itemId, sourceId ?: itemId, stream[@"Index"]];
-    if ([url rangeOfString:@"api_key="].location == NSNotFound) {
-        url = [url stringByAppendingFormat:@"%@api_key=%@", [url rangeOfString:@"?"].location == NSNotFound ? @"?" : @"&", [self token]];
+    if ([url rangeOfString:@"api_key="].location == NSNotFound && [url rangeOfString:@"ApiKey="].location == NSNotFound) {
+        url = [url stringByAppendingFormat:@"%@%@", [url rangeOfString:@"?"].location == NSNotFound ? @"?" : @"&", [self tokenQuery]];
     }
     return url;
 }
@@ -506,8 +508,8 @@ static NSString *const kFields = @"Fields=PrimaryImageAspectRatio,ProductionYear
                 // Jellyfin reports e.g. "mov,mp4,m4a,3gp,3g2,mj2"; AVPlayer needs one plain extension.
                 NSString *container = [[IBString(src[@"Container"]) ?: @"mp4" componentsSeparatedByString:@","] firstObject];
                 if ([@[@"mov", @"m4v", @"mp4", @"m4a", @"3gp"] containsObject:container]) container = @"mp4";
-                url = [NSString stringWithFormat:@"%@/Videos/%@/stream.%@?Static=true&MediaSourceId=%@&PlaySessionId=%@&api_key=%@",
-                       [self server], itemId, container, IBString(src[@"Id"]), session, [self token]];
+                url = [NSString stringWithFormat:@"%@/Videos/%@/stream.%@?Static=true&MediaSourceId=%@&PlaySessionId=%@&%@",
+                       [self server], itemId, container, IBString(src[@"Id"]), session, [self tokenQuery]];
                 method = @"DirectPlay";
             }
             info = @{@"ItemId": itemId, @"MediaSourceId": IBString(src[@"Id"]) ?: itemId, @"PlaySessionId": session, @"PlayMethod": method};
@@ -581,8 +583,8 @@ static NSString *const kFields = @"Fields=PrimaryImageAspectRatio,ProductionYear
         m.artworkURL = [self image:t wide:NO];
         m.audioOnly = YES;
         NSString *session = [[NSUUID class] respondsToSelector:@selector(UUID)] ? [[NSUUID UUID] UUIDString] : itemId;
-        m.url = [NSString stringWithFormat:@"%@/Audio/%@/universal?UserId=%@&DeviceId=%@&api_key=%@&Container=mp3,aac,m4a%%7Caac&AudioCodec=aac,mp3&TranscodingContainer=mp3&TranscodingProtocol=http&MaxStreamingBitrate=320000&PlaySessionId=%@",
-                 [self server], itemId, [self userId], [IBSettings deviceId], [self token], session];
+        m.url = [NSString stringWithFormat:@"%@/Audio/%@/universal?UserId=%@&DeviceId=%@&%@&Container=mp3,aac,m4a%%7Caac&AudioCodec=aac,mp3&TranscodingContainer=mp3&TranscodingProtocol=http&MaxStreamingBitrate=320000&PlaySessionId=%@",
+                 [self server], itemId, [self userId], [IBSettings deviceId], [self tokenQuery], session];
         NSDictionary *info = @{@"ItemId": itemId, @"PlaySessionId": session, @"PlayMethod": @"DirectStream"};
         m.onEvent = ^(IBMedia *media, NSString *event, NSTimeInterval pos, BOOL paused) {
             [self report:event media:media position:pos paused:paused info:info];
